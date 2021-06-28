@@ -4,3 +4,24 @@
 #
 #    pip-compile
 #
+bcrypt==3.2.0
+    # via paramiko
+cffi==1.14.5
+    # via
+    #   bcrypt
+    #   cryptography
+    #   pynacl
+cryptography==3.4.7
+    # via paramiko
+paramiko==2.7.2
+    # via ts3
+pycparser==2.20
+    # via cffi
+pynacl==1.4.0
+    # via paramiko
+six==1.16.0
+    # via
+    #   bcrypt
+    #   pynacl
+ts3==2.0.0b3
+    # via -r requirements.in
