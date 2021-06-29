@@ -12,12 +12,15 @@ GUILD_ID = 706588450731851847
 
 
 def main():
+    utils.setup_logging()
     main_logger = logging.getLogger("main")
 
     main_logger.info("Start of program")
 
     args = utils.get_args()
     main_logger.debug(f"Prog args: {args}")
+
+    exit()
 
     teamspeak_getter = TeamspeakInfoGetter(query_username=query_acc_user,
                                            query_password=query_acc_password)
