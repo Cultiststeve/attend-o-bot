@@ -1,3 +1,5 @@
 ts3>=2.0.0b2  # force beta version 2
 discord
 ConfigArgParse
+selenium>=4.0.0.b4
+urllib3

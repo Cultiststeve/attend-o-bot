@@ -2,3 +2,4 @@
 venv/
 __pycache__/
 my_secret_config.yml
+screenshot.png

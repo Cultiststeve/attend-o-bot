@@ -1,3 +1,6 @@
 discord_bot_token: ""
 
+51_form_user_name: ""
+51_form_password: ""
+
 some_test_var: "abc"
