@@ -41,15 +41,25 @@ admin_event_id = event_id.get_attribute("value")
 admin_event_url = driver.get(f"https://51stregiment.com/forum/index.php?action=admin_register_event;event={admin_event_id}")
 checkbox_form = driver.find_element_by_xpath("/html/body/div[3]/div/div/table/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr/td[1]/form")
 
+name_list = checkbox_form.text.split(sep="\n")[4:]
+name_list = [x.strip() for x in name_list]
+
+checkbox_list = checkbox_form.find_elements_by_tag_name("input")
+checkbox_list = checkbox_list[3:]
+
+my_index = name_list.index("Cultiststeve")
+print(f"Found name at {my_index}")
+checkbox_list[my_index].click()
+
 # driver.switch_to.frame(checkbox_form)
 
 # my checkbox is
-my_checkbox = driver.find_element(By.XPATH, """//*[@id="checkm_1092"]//preceding-sibling::input[1]""")
+# my_checkbox = driver.find_element(By.XPATH, """//*[@id="checkm_1092"]//preceding-sibling::input[1]""")
 # my_checkbox = driver.find_element(By.XPATH, """//*[@id="checkm_1092"]""")
 
-below_my_checkbox = my_checkbox.find_element(with_tag_name("input").below(my_checkbox))
+# below_my_checkbox = my_checkbox.find_element(with_tag_name("input").below(my_checkbox))
 
-print(my_checkbox)
+# print(my_checkbox)
 
-# driver.save_screenshot("screenshot.png")
+driver.save_screenshot("screenshot.png")
 driver.quit()
