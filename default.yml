@@ -1,6 +1,14 @@
-discord_bot_token: ""
+discord_bot_token:
+discord_guild_name: Cultiststeve's playground
 
-51_form_user_name: ""
-51_form_password: ""
+51_form_user:
+51_form_pass:
 
-some_test_var: "abc"
+ts_query_user:
+ts_query_pass:
+
+ts_url: localhost
+ts_port: 10022
+
+webdriver_host: http://localhost
+webdriver_port: 4444
