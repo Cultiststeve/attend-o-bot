@@ -14,33 +14,14 @@ class TeamspeakQueryControl:
     def list_all_clients(self) -> List:
         logging.info("Listing all clients")
         resp = self.ts3conn.query(cmd="clientlist").fetch()
+        return resp.parsed
 
-        client_list = resp.data[0]
-        client_list = client_list.decode("utf-8")
-        client_list = client_list.split('|')
-        return [TeamspeakQueryControl.client_str_to_dict(x) for x in client_list]
+    def list_all_channels(self) -> List:
+        logging.info("Listing all channels")
+        resp = self.ts3conn.query(cmd="channellist").fetch()
+        return resp.parsed
 
-    @staticmethod
-    def client_str_to_dict(client_str: str) -> Dict:
-        split_str = client_str.split(sep=' ')
-        client_dict = {"clid": split_str[0][5:],
-                       "client_nickname": split_str[3][16:]}
-        return client_dict
-
-    # def get_cid_of_channel_name(self, name: str):
-    #     channel_list = self.ts3conn.query("channellist").all()
-    #     for channel in channel_list:
-    #         if channel["channel_name"] == name:
-    #             return channel["cid"]
-    #     return None
-    #
-    # def get_clients_in_cid(self, search_cid: int):
-    #     client_list = self.ts3conn.query("clientlist").all()
-    #     in_channel_clients = []
-    #     for client in client_list:
-    #         if client["cid"] == search_cid:
-    #             in_channel_clients.append(client)
-    #
-    #     return in_channel_clients
-
+    def get_client_info(self, clid):
+        resp = self.ts3conn.query(f"clientinfo", clid=clid).fetch()
+        return resp.parsed
 

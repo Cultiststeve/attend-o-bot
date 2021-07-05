@@ -20,8 +20,6 @@ def get_args() -> Dict:
     parser.add_argument("--discord_bot_token")
     parser.add_argument("--discord_guild_name")
 
-
-
     parser.add_argument("--ts_url")
     parser.add_argument("--ts_port")
     parser.add_argument("--ts_query_user")
