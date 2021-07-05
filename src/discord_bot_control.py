@@ -89,7 +89,6 @@ async def take_attendance(ctx, event_id: str):
             await ctx.send(f"{client['client_nickname']} not in cid list, not attending.")
             continue
 
-
         # Find closest match in selenium list
         enlistment_name, match_percent = fuzzy_process.extractOne(query=client["client_nickname"], choices=website_names)
         logging.debug(f"Match for {client['client_nickname']} = {enlistment_name} - {match_percent}")
@@ -98,7 +97,6 @@ async def take_attendance(ctx, event_id: str):
                            f"you must add this person manually")
             continue
 
-
         if selenium_controller.tick_box_for_name(enlistment_name):
             await ctx.send(f"Marked {client['client_nickname']}={enlistment_name} as attending")
         else:
@@ -106,6 +104,7 @@ async def take_attendance(ctx, event_id: str):
             await ctx.send(f"Did not find a matching name for {client['client_nickname']}={enlistment_name}."
                            f"This should not happen after fuzzy matching, sorry.")
 
+    selenium_controller.click_submit()
 
 @bot.command()
 async def get_clids(ctx):

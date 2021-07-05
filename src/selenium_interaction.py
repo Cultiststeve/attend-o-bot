@@ -59,6 +59,7 @@ class SeleneiumController:
         event_id_element = self.driver.find_element_by_xpath(
             "/html/body/div[3]/div/div/table/tbody/tr/td/div[1]/div[2]/div/ul/li[2]/form/input[2]")
         admin_event_id = event_id_element.get_attribute("value")
+        logging.info(f"Going to admin for event {event_id}. Admin event id is {admin_event_id}")
         self.driver.get(f"https://51stregiment.com/forum/index.php?action=admin_register_event;event={admin_event_id}")
         self.driver.save_screenshot("screenshots/go_to_admin.png")
 
@@ -89,5 +90,13 @@ class SeleneiumController:
         logging.info(f"Checked box for {name}")
 
 
+
         self.driver.save_screenshot("screenshots/tick_box_for_name.png")
         return True
+
+    def click_submit(self):
+        submit_button = self.driver.find_element(by=By.XPATH,
+                                                 value="/html/body/div[3]/div/div/table/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr/td[1]/form/p[1]/input")
+        logging.debug(f"Clicking submit button - it has text {submit_button.get_attribute(name='value')}")
+        # TODO uncomment this if your SURE
+        # submit_button.click()
