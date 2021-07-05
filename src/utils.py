@@ -31,5 +31,6 @@ def get_args() -> Dict:
     parser.add_argument("--51_form_user")
     parser.add_argument("--51_form_pass")
 
-    parser.add_argument("--some_test_var")
+    parser.add_argument("--fuzzy_match_distance", type=int)
+
     return vars(parser.parse_args())

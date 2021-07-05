@@ -62,13 +62,19 @@ class SeleneiumController:
         self.driver.get(f"https://51stregiment.com/forum/index.php?action=admin_register_event;event={admin_event_id}")
         self.driver.save_screenshot("screenshots/go_to_admin.png")
 
+    def get_name_list(self):
+        checkbox_form = self.driver.find_element_by_xpath(
+            "/html/body/div[3]/div/div/table/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr/td[1]/form")
+        name_list = checkbox_form.text.split(sep="\n")[4:]  # First 4 text items are not names
+        name_list = [x.strip() for x in name_list]
+        return name_list
+
     def tick_box_for_name(self, name: str):
         logging.info(f"Attempting to tick box for {name}")
         checkbox_form = self.driver.find_element_by_xpath(
             "/html/body/div[3]/div/div/table/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr/td[1]/form")
 
-        name_list = checkbox_form.text.split(sep="\n")[4:]
-        name_list = [x.strip() for x in name_list]
+        name_list = self.get_name_list()
 
         checkbox_list = checkbox_form.find_elements_by_tag_name("input")
         checkbox_list = checkbox_list[3:]

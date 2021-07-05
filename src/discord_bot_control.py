@@ -4,9 +4,13 @@ from typing import Optional, Dict
 
 import discord
 from discord.ext import commands
+from fuzzywuzzy import process as fuzzy_process
 
 from src.teamspeak_querying import TeamspeakQueryControl
 from src.selenium_interaction import SeleneiumController
+from utils import get_args
+
+args = get_args()
 
 # Set intents, default for now
 intents = discord.Intents.default()
@@ -76,16 +80,31 @@ async def take_attendance(ctx, event_id: str):
 
     clients = teamspeak_query_controller.list_all_clients()
 
+    website_names = selenium_controller.get_name_list()
+
     for client in clients:
 
+        # If we have a channel list, filter clients not in channels
         if cid_list and client["cid"] not in cid_list:
             await ctx.send(f"{client['client_nickname']} not in cid list, not attending.")
             continue
 
-        if selenium_controller.tick_box_for_name(client["client_nickname"]):
-            await ctx.send(f"Ticked box for {client['client_nickname']}")
+
+        # Find closest match in selenium list
+        enlistment_name, match_percent = fuzzy_process.extractOne(query=client["client_nickname"], choices=website_names)
+        logging.debug(f"Match for {client['client_nickname']} = {enlistment_name} - {match_percent}")
+        if match_percent < args.get("fuzzy_match_distance"):
+            await ctx.send(f"Did not find a close enough match for {client['client_nickname']}, "
+                           f"you must add this person manually")
+            continue
+
+
+        if selenium_controller.tick_box_for_name(enlistment_name):
+            await ctx.send(f"Marked {client['client_nickname']}={enlistment_name} as attending")
         else:
-            await ctx.send(f"Did not find a matching name for {client['client_nickname']}")
+            logging.error(f"After fuzzy matching, could not tick box for {enlistment_name=} for {client['client_nickname']}")
+            await ctx.send(f"Did not find a matching name for {client['client_nickname']}={enlistment_name}."
+                           f"This should not happen after fuzzy matching, sorry.")
 
 
 @bot.command()

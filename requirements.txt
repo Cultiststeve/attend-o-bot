@@ -39,6 +39,8 @@ discord==1.7.3
     # via -r requirements.in
 discord.py==1.7.3
     # via discord
+fuzzywuzzy==0.18.0
+    # via -r requirements.in
 h11==0.12.0
     # via wsproto
 idna==3.2

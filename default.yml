@@ -12,3 +12,5 @@ ts_port: 10022
 
 webdriver_host: http://localhost
 webdriver_port: 4444
+
+fuzzy_match_distance: 80
