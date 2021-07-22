@@ -4,6 +4,10 @@ discord_guild_name: Cultiststeve's playground
 51_form_user:
 51_form_pass:
 
+sql_host:
+sql_user:
+sql_pass:
+
 ts_query_user:
 ts_query_pass:
 
@@ -13,4 +17,5 @@ ts_port: 10022
 webdriver_host: http://localhost
 webdriver_port: 4444
 
-fuzzy_match_distance: 80
+
+fuzzy_match_distance: 90

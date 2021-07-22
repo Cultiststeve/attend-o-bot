@@ -52,10 +52,14 @@ multidict==5.1.0
     # via
     #   aiohttp
     #   yarl
+mysql-connector-python==8.0.26
+    # via -r requirements.in
 outcome==1.1.0
     # via trio
 paramiko==2.7.2
     # via ts3
+protobuf==3.17.3
+    # via mysql-connector-python
 pycparser==2.20
     # via cffi
 pynacl==1.4.0
@@ -67,6 +71,7 @@ selenium==4.0.0b4
 six==1.16.0
     # via
     #   bcrypt
+    #   protobuf
     #   pynacl
     #   pyopenssl
 sniffio==1.2.0

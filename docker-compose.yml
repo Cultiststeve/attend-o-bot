@@ -1,6 +1,16 @@
 version: "3"
+
+
+
 services:
   selenium-driver:
     image: selenium/standalone-firefox:89.0
     ports:
       - "4444:4444"
+  mysql:
+    image: mysql:8.0.26
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: sausage
+

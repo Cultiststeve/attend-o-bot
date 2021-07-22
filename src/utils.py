@@ -31,6 +31,11 @@ def get_args() -> Dict:
     parser.add_argument("--51_form_user")
     parser.add_argument("--51_form_pass")
 
+    parser.add_argument("--sql_host")
+    parser.add_argument("--sql_user")
+    parser.add_argument("--sql_pass")
+
+
     parser.add_argument("--fuzzy_match_distance", type=int)
 
     return vars(parser.parse_args())
