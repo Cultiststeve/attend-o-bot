@@ -56,10 +56,9 @@ async def roll(ctx, dice: str):
 # ------------ Main commands to use ------------
 
 class AttendanceFunctions(commands.Cog):
-    def __init__(self, cog_bot):
+    def __init__(self, cog_bot: commands.Bot):
         self.logger = logging.getLogger("main.discord_bot_control.AttendanceFunctions")
         self.bot = cog_bot
-        self.taking_attendance = False
         self.current_event_id: Optional[int] = None
         self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
 
@@ -129,7 +128,11 @@ class AttendanceFunctions(commands.Cog):
 
     @commands.command()
     async def current_state(self, ctx):
-        await self.log_and_discord_print(ctx, f"{self.taking_attendance=}, {self.current_event_id=}")
+        await self.log_and_discord_print(ctx, f"{self.add_current_in_ts.is_running()=}, {self.current_event_id=}")
+
+    @tasks.loop(seconds=5)
+    async def add_current_in_ts(self, ctx_started_from):
+        await self.log_and_discord_print(ctx_started_from, "Searching for members in teamspeak...")
 
     @commands.command()
     async def start_new_event_attendance(self, ctx, event_name: str):
@@ -139,16 +142,16 @@ class AttendanceFunctions(commands.Cog):
             event_name (str): The name of the event, for display on forums
         """
         logging.debug(f"Got cmd: start_new_event_attendance")
-        if self.taking_attendance:
+        if self.add_current_in_ts.is_running():
             await self.log_and_discord_print(ctx, "Already taking attendance, please stop existing")
             return
 
         self.current_event_id = sql_controller.create_event(event_name)
-        self.taking_attendance = True
         await self.log_and_discord_print(ctx,
                                          f"Created new event with name {event_name} and id {self.current_event_id}. "
                                          f"Now taking attendance for this event, for channels {1}")
-        # TODO
+
+        self.add_current_in_ts.start(ctx)
 
     @commands.command()
     async def start_existing_event_attendance(self, ctx, event_id: int):
@@ -159,21 +162,22 @@ class AttendanceFunctions(commands.Cog):
 
         """
         logging.debug(f"Got cmd: start_existing_event_attendance with {event_id}")
-        if self.taking_attendance:
+        if self.add_current_in_ts.is_running():
             await self.log_and_discord_print(f"Already taking attendance for event id {self.current_event_id}. "
                                              f"Please stop this first")
             return
         # TODO
-        pass
+        self.current_event_id = event_id
+        self.add_current_in_ts.start()
 
     @commands.command()
     async def stop_event_attendance(self, ctx):
         """Stops the bot if attendance taking is currently underway, and prints a summary."""
         logging.debug(f"Got cmd: stop_event_attendance")
-        if self.taking_attendance:
-            self.taking_attendance = False
-            self.current_event_id = None
+        if self.add_current_in_ts.is_running():
+            self.add_current_in_ts.stop()
             await ctx.send(f"Stopped taking attendance for {self.current_event_id}")
+            self.current_event_id = None
         else:
             await self.log_and_discord_print(ctx, "Not currently taking attendance.")
 
