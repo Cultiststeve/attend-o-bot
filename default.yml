@@ -11,7 +11,7 @@ sql_pass:
 ts_query_user:
 ts_query_pass:
 
-ts_url: localhost
+ts_url:
 ts_port: 10022
 
 webdriver_host: http://localhost

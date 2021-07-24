@@ -42,12 +42,12 @@ class SQLInteraction:
         if commit: self.connection.commit()
         return self.cursor.fetchall()
 
-    def add_member(self):
+    def add_member(self, member_name):
         """Only use locally for test purposes"""
         if self.connection.server_host != "localhost":
             raise Exception("Do not add new members outside of local DB, dummy")
         query = "INSERT INTO smf_members(member_name, buddy_list, message_labels, openid_uri, signature, ignore_boards) " \
-                "VALUES('cultiststeve', '', '', '', '', '')"
+                f"VALUES('{member_name}', '', '', '', '', '')"
         self.logger.debug(f"Adding member with: {query}")
         return self.execute_query(query=query, commit=True)
 
@@ -103,11 +103,19 @@ class SQLInteraction:
         self.logger.debug(f"Adding attendee with: {add_attendee_query}")
         return self.execute_query(query=add_attendee_query, commit=True)
 
+    def get_all_users(self):
+        """Returns a list of tuples, with user rows"""
+        see_users = "SELECT * FROM smf_members"
+        return self.execute_query(see_users)
+
+
     def print_all_tables(self):
         print("top: " + str(self.execute_query("SELECT * FROM smf_topics")))
         print("msg: " + str(self.execute_query("SELECT * FROM smf_messages")))
         print("cal: " + str(self.execute_query("SELECT * FROM smf_calendar")))
         print("crg: " + str(self.execute_query("SELECT * FROM smf_calendar_reg")))
+        print("mem: " + str(self.execute_query("SELECT * FROM smf_members")))
+
 
 
 if __name__ == "__main__":
@@ -119,8 +127,8 @@ if __name__ == "__main__":
         password=args["sql_pass"]
     )
 
-    tables = myclass.execute_query("show tables")
-    logging.info(f"{tables=}")
+    # tables = myclass.execute_query("show tables")
+    # logging.info(f"{tables=}")
 
     # for table in tables:
     #     described = myclass.execute_query(f"describe {table[0]};")
@@ -130,7 +138,7 @@ if __name__ == "__main__":
     # print(myclass.execute_query("SELECT * FROM smf_members WHERE member_name='cultiststeve'"))
     # cultiststeve = 2764
 
-    add_attendee = myclass.add_attendee_to_event(id_event=927, id_member=2764)
+    # add_attendee = myclass.add_attendee_to_event(id_event=927, id_member=2764)
 
     # myclass.create_event(title="Saturday Naval")
 
@@ -142,3 +150,9 @@ if __name__ == "__main__":
     # myclass.execute_query("DELETE FROM smf_calendar_reg WHERE id_entry=31729", commit=True)
 
     myclass.print_all_tables()
+
+    # myclass.add_member("sparky")
+
+    users =myclass.get_all_users()
+
+    print(f"Currently {len(users)} users in the db")

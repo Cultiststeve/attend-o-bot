@@ -11,6 +11,7 @@ class TeamspeakQueryControl:
             f"ssh://{query_username}:{query_password}@{server_url}:{server_port}")
         self.ts3conn.exec_("use", sid=SID)
 
+
     def list_all_clients(self) -> List:
         logging.info("Listing all clients")
         resp = self.ts3conn.query(cmd="clientlist").fetch()
@@ -25,3 +26,5 @@ class TeamspeakQueryControl:
         resp = self.ts3conn.query(f"clientinfo", clid=clid).fetch()
         return resp.parsed
 
+    def keep_conn_alive(self):
+        self.ts3conn.send_keepalive()

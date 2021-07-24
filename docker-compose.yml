@@ -14,7 +14,9 @@ services:
     ports:
       - 9987:9987/udp
       - 10011:10011
+      - 10022:10022
       - 30033:30033
     environment:
       TS3SERVER_LICENSE: accept
+      TS3SERVER_QUERY_PROTOCOLS: raw,ssh
 

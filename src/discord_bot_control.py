@@ -5,7 +5,7 @@ import traceback
 import sys
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from fuzzywuzzy import process as fuzzy_process
 
 from src.teamspeak_querying import TeamspeakQueryControl
@@ -57,9 +57,14 @@ async def roll(ctx, dice: str):
 
 class AttendanceFunctions(commands.Cog):
     def __init__(self, cog_bot):
+        self.logger = logging.getLogger("main.discord_bot_control.AttendanceFunctions")
         self.bot = cog_bot
         self.taking_attendance = False
         self.current_event_id: Optional[int] = None
+        self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
+
+    def cog_unload(self):
+        self.ts3_keep_aliver.cancel()
 
     @staticmethod
     async def log_and_discord_print(ctx, message, level=logging.INFO):
@@ -117,6 +122,11 @@ class AttendanceFunctions(commands.Cog):
             await ctx.send(f"Error while processing {ctx.command} : {error}")  # inform user
             # traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
+    @tasks.loop(seconds=200)
+    async def ts3_keep_aliver(self):
+        self.logger.debug("Sending keepalive to ts3")
+        teamspeak_query_controller.keep_conn_alive()
+
     @commands.command()
     async def current_state(self, ctx):
         await self.log_and_discord_print(ctx, f"{self.taking_attendance=}, {self.current_event_id=}")
@@ -138,6 +148,7 @@ class AttendanceFunctions(commands.Cog):
         await self.log_and_discord_print(ctx,
                                          f"Created new event with name {event_name} and id {self.current_event_id}. "
                                          f"Now taking attendance for this event, for channels {1}")
+        # TODO
 
     @commands.command()
     async def start_existing_event_attendance(self, ctx, event_id: int):
@@ -152,9 +163,8 @@ class AttendanceFunctions(commands.Cog):
             await self.log_and_discord_print(f"Already taking attendance for event id {self.current_event_id}. "
                                              f"Please stop this first")
             return
-        else:
-            # TODO
-            pass
+        # TODO
+        pass
 
     @commands.command()
     async def stop_event_attendance(self, ctx):
@@ -167,27 +177,24 @@ class AttendanceFunctions(commands.Cog):
         else:
             await self.log_and_discord_print(ctx, "Not currently taking attendance.")
 
-# def format_clients_for_humans(clients: list):
-#     clients = [f"{x['client_nickname']} - Client ID:{x['clid']}" for x in clients]
-#     return clients
+    @commands.command()
+    async def list_clients(self, ctx):
+        """
+        Replys with a list of clients on the teamspeak server
+        :param ctx:
+        :param teamspeak_query_controller:
+        :return:
+        """
+        clients = teamspeak_query_controller.list_all_clients()
+        await self.log_and_discord_print(ctx, format_clients_for_humans(clients))
+
+
+def format_clients_for_humans(clients: list):
+    clients = [f"{x['client_nickname']} - Client ID:{x['clid']}" for x in clients]
+    return clients
 #
 #
-# @bot.command()
-# async def list_clients(ctx):
-#     """
-#     Just reply with a list of clients on the teamspeak server
-#     :param ctx:
-#     :param teamspeak_query_controller:
-#     :return:
-#     """
-#     if not teamspeak_query_controller:
-#         err_str = "No teamspeak query controller available"
-#         logging.error(err_str)
-#         await ctx.send(f"Internal error {err_str}")
-#
-#     clients = teamspeak_query_controller.list_all_clients()
-#
-#     await ctx.send(format_clients_for_humans(clients))
+
 #
 #
 # @bot.command()
