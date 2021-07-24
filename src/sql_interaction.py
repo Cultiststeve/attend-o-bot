@@ -9,7 +9,7 @@ from utils import get_args
 args = get_args()
 
 
-class SQLInteraction():
+class SQLInteraction:
 
     def __init__(self,
                  host,
@@ -23,6 +23,7 @@ class SQLInteraction():
         self.cursor = self.connection.cursor()
         self.id_member = 2764  # TODO what is the ID of our bot poster
         self.bot_name = "attend-o-tron"
+        self.select_database()
 
     def __del__(self):
         try:
@@ -31,6 +32,7 @@ class SQLInteraction():
             pass
 
     def select_database(self, db_name: str = "fiftyfirst"):
+        # TODO DB name?
         self.cursor.execute(f"use {db_name};")
         self.logger.info("Selected fiftyfirst DB")
 
@@ -81,6 +83,9 @@ class SQLInteraction():
                           f"VALUES('{title}', '{start_date}', '{end_date}', '{id_board}', '{id_topic}', '{max_attendants}', '{termsnconns}', '{self.id_member}')"
         self.logger.debug(f"Adding event to smf_calendar: {add_event_query}")
         self.execute_query(query=add_event_query)
+        id_event = self.cursor.lastrowid
+
+        return id_event
 
     def add_attendee_to_event(self,
                               id_event,
@@ -113,7 +118,6 @@ if __name__ == "__main__":
         user=args["sql_user"],
         password=args["sql_pass"]
     )
-    myclass.select_database()
 
     tables = myclass.execute_query("show tables")
     logging.info(f"{tables=}")

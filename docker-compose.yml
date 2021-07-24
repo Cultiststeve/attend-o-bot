@@ -3,14 +3,18 @@ version: "3"
 
 
 services:
-  selenium-driver:
-    image: selenium/standalone-firefox:89.0
-    ports:
-      - "4444:4444"
   mysql:
     image: mysql:8.0.26
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: sausage
+  ts3-server:
+    image: teamspeak:3.13.6
+    ports:
+      - 9987:9987/udp
+      - 10011:10011
+      - 30033:30033
+    environment:
+      TS3SERVER_LICENSE: accept
 
