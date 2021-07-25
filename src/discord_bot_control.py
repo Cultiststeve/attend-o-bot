@@ -1,6 +1,6 @@
 import logging
 import random
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import traceback
 import sys
 
@@ -62,8 +62,12 @@ class AttendanceFunctions(commands.Cog):
         self.current_event_id: Optional[int] = None
         self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
 
+        self.channel_whitelist: List = []
+        self.set_target_channels_inner(target_channels="Server 1, Server 2")
+
     def cog_unload(self):
         self.ts3_keep_aliver.cancel()
+        self.take_attendance.cancel()
 
     @staticmethod
     async def log_and_discord_print(ctx, message, level=logging.INFO):
@@ -128,11 +132,35 @@ class AttendanceFunctions(commands.Cog):
 
     @commands.command()
     async def current_state(self, ctx):
-        await self.log_and_discord_print(ctx, f"{self.add_current_in_ts.is_running()=}, {self.current_event_id=}")
+        """Debug function, list intresting state variable values"""
+        await self.log_and_discord_print(ctx, f"```{self.take_attendance.is_running()=}\n"
+                                              f"{self.current_event_id=}\n"
+                                              f"{self.channel_whitelist=}\n"
+                                              f"```")
+
+    def set_target_channels_inner(self, target_channels: str):
+        target_channels = target_channels.split(sep=',')
+        self.channel_whitelist = teamspeak_query_controller.get_children_named_channels(
+            target_channel_names=target_channels)
+
+
+    @commands.command()
+    async def set_target_channels(self, ctx, target_channels: str):
+        """Set the whitelist of target channels for attendance
+
+        Args:
+            target_channels(str), comma seperated list of channel names, all surrounded by ""
+        """
+        self.set_target_channels_inner(target_channels)
+        await self.log_and_discord_print(ctx, message=f"Set channel whitelist to {self.channel_whitelist}")
 
     @tasks.loop(seconds=5)
-    async def add_current_in_ts(self, ctx_started_from):
+    async def take_attendance(self, ctx_started_from):
+        """While running, this function monitors everyone in teamspeak in the right channels"""
         await self.log_and_discord_print(ctx_started_from, "Searching for members in teamspeak...")
+        all_clients = teamspeak_query_controller.list_all_clients()
+        all_channels = teamspeak_query_controller.list_all_channels()
+        pass
 
     @commands.command()
     async def start_new_event_attendance(self, ctx, event_name: str):
@@ -142,7 +170,7 @@ class AttendanceFunctions(commands.Cog):
             event_name (str): The name of the event, for display on forums
         """
         logging.debug(f"Got cmd: start_new_event_attendance")
-        if self.add_current_in_ts.is_running():
+        if self.take_attendance.is_running():
             await self.log_and_discord_print(ctx, "Already taking attendance, please stop existing")
             return
 
@@ -151,7 +179,7 @@ class AttendanceFunctions(commands.Cog):
                                          f"Created new event with name {event_name} and id {self.current_event_id}. "
                                          f"Now taking attendance for this event, for channels {1}")
 
-        self.add_current_in_ts.start(ctx)
+        self.take_attendance.start(ctx)
 
     @commands.command()
     async def start_existing_event_attendance(self, ctx, event_id: int):
@@ -162,20 +190,20 @@ class AttendanceFunctions(commands.Cog):
 
         """
         logging.debug(f"Got cmd: start_existing_event_attendance with {event_id}")
-        if self.add_current_in_ts.is_running():
+        if self.take_attendance.is_running():
             await self.log_and_discord_print(f"Already taking attendance for event id {self.current_event_id}. "
                                              f"Please stop this first")
             return
         # TODO
         self.current_event_id = event_id
-        self.add_current_in_ts.start()
+        self.take_attendance.start(ctx)
 
     @commands.command()
     async def stop_event_attendance(self, ctx):
         """Stops the bot if attendance taking is currently underway, and prints a summary."""
         logging.debug(f"Got cmd: stop_event_attendance")
-        if self.add_current_in_ts.is_running():
-            self.add_current_in_ts.stop()
+        if self.take_attendance.is_running():
+            self.take_attendance.stop()
             await ctx.send(f"Stopped taking attendance for {self.current_event_id}")
             self.current_event_id = None
         else:
