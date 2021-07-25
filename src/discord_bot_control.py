@@ -34,8 +34,7 @@ cid_list = None
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user} (ID: {bot.user.id})')
-    print('------')
+    logging.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
 
 
 @bot.command()
@@ -60,13 +59,17 @@ class AttendanceFunctions(commands.Cog):
     def __init__(self, cog_bot: commands.Bot):
         self.logger = logging.getLogger("main.discord_bot_control.AttendanceFunctions")
         self.bot = cog_bot
-        self.current_event_id: Optional[int] = None
-        self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
 
         self.channel_whitelist: List = []
         self.set_target_channels_inner(target_channels="Server 1, Server 2")
 
-        self.first_seen: dict = {}  # During an event, keep track of when we first saw clids
+        self.current_event_id: Optional[int] = None
+        self.current_event_name: str
+        self.first_seen = {}  # During an event, keep track of when we first saw clids
+        self.matched = {}  # key is ts user, val is db name
+        self.not_matched = set()  # Set of ts usernames
+
+        self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
 
     def cog_unload(self):
         self.ts3_keep_aliver.cancel()
@@ -163,16 +166,19 @@ class AttendanceFunctions(commands.Cog):
         await self.log_and_discord_print(ctx_started_from, "Searching for members in teamspeak...")
         all_clients = teamspeak_query_controller.list_all_clients()
         for client in all_clients:
+            # TODO channel whitelist
             clid = client.get("clid")
             client_nickname = client.get('client_nickname')
             if clid in self.first_seen.keys():
                 if self.first_seen[clid] == True:
                     continue  # Already added to attendance, no further processing needed
-                if self.first_seen[clid] + datetime.timedelta(minutes=args.get("time_to_attend")) < datetime.datetime.now():
+                if self.first_seen[clid] + \
+                        datetime.timedelta(minutes=args.get("time_to_attend")) < datetime.datetime.now():
                     # We saw them over 20 min ago, add to db
                     await self.log_and_discord_print(ctx_started_from,
-                                                     f"Saw {client_nickname} over {args.get('time_to_attend')} min ago - attempted to match to database name")
-                    res = await self.add_client_to_attendance(ctx_started_from, client)
+                                                     f"Saw {client_nickname} over {args.get('time_to_attend')} "
+                                                     f"min ago - attempted to match to database name")
+                    success = await self.add_client_to_attendance(ctx_started_from, client)
                     self.first_seen[clid] = True
             else:  # if first sighting
                 self.first_seen[clid] = datetime.datetime.now()
@@ -191,6 +197,7 @@ class AttendanceFunctions(commands.Cog):
             await self.log_and_discord_print(ctx,
                                              f"**Did not find a close enough match for TS user {client['client_nickname']}, "
                                              f"you must add this person manually**")
+            self.not_matched.add(ts_client_username)
             return False
 
         else:
@@ -200,6 +207,7 @@ class AttendanceFunctions(commands.Cog):
             id_member = id_member[0]
             self.logger.debug(f"Found matching ID for {client['client_nickname']} - {id_member=}")
             sql_controller.add_attendee_to_event(id_event=self.current_event_id, id_member=id_member)
+            self.matched[ts_client_username] = sql_username_matching
             await self.log_and_discord_print(ctx,
                                              f"Found a match for TS user: {ts_client_username} = Database name: {sql_username_matching}.\n"
                                              f"Added to event {self.current_event_id}")
@@ -248,9 +256,35 @@ class AttendanceFunctions(commands.Cog):
         if self.scan_for_attendance.is_running():
             self.scan_for_attendance.stop()
             await ctx.send(f"Stopped taking attendance for {self.current_event_id}")
+
+            await self.do_event_summary(ctx)
+            # Clear out the globals
             self.current_event_id = None
+            self.current_event_name = None
+            self.first_seen = {}
+            self.matched = {}
+            self.not_matched = {}
         else:
             await self.log_and_discord_print(ctx, "Not currently taking attendance.")
+
+    async def do_event_summary(self, ctx):
+        # TODO promotions#
+        str_to_send = "```"
+        str_to_send += "Summary for {self.current_event_name} - {self.current_event_id}\n"
+        str_to_send += "Added the following matches to the attendance for this event:\n"
+        for match in self.matched:
+            str_to_send += f"* {match} = {self.matched[match]}"
+        str_to_send += "Could not find a match for the following, *You must add them manually*:\n"
+        for notmatch in self.not_matched:
+            str_to_send += f"* {notmatch} = {self.not_matched[notmatch]}\n"
+        str_to_send += "The following people were seen but had not attended for enough time to earn attendance:\n"
+        for first_seen in self.first_seen:
+            if first_seen == True:
+                continue  # Attempt to match was made
+            str_to_send += f"* {first_seen} - first seen at {self.first_seen['first_seen']}\n"
+        str_to_send += "```"
+        await ctx.send(str_to_send)
+    pass
 
     @commands.command()
     async def list_clients(self, ctx):
