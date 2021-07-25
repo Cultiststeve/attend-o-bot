@@ -23,6 +23,8 @@ class SQLInteraction:
         self.cursor = self.connection.cursor()
         self.id_member = 2764  # TODO what is the ID of our bot poster
         self.bot_name = "attend-o-tron"
+        self.bot_email = "attendance@fidyfirst.com"
+        self.bot_ip = "192.168.0.256"
         self.select_database()
 
     def __del__(self):
@@ -59,6 +61,7 @@ class SQLInteraction:
                      termsnconns: str = "",
                      id_board=12):
         """Add event (and corresponding thread + message)"""
+        self.logger.info(f"Adding event with {title}")
 
         # TODO id_board? - maybe 12
 
@@ -68,8 +71,10 @@ class SQLInteraction:
         id_topic = self.cursor.lastrowid
         # TODO previous board and topic?
 
-        add_msg = "INSERT INTO smf_messages(id_topic, id_board, id_member, subject, poster_name, body) " \
-                  f"VALUES('{id_topic}', '{id_board}', '{self.id_member}', '{title}', '{self.bot_name}', '{title}')"
+        add_msg = "INSERT INTO smf_messages(id_topic, id_board, poster_time, id_member, subject, " \
+                  "poster_name, poster_email, poster_ip, body) " \
+                  f"VALUES('{id_topic}', '{id_board}', UNIX_TIMESTAMP(), '{self.id_member}', '{title}', " \
+                  f"'{self.bot_name}', '{self.bot_email}', '{self.bot_ip}', '{title}')"
         self.execute_query(query=add_msg)
         id_message = self.cursor.lastrowid
         # TODO poster time, id_msg_modified, poster_email, poster_ip, icon
@@ -81,8 +86,7 @@ class SQLInteraction:
 
         add_event_query = "INSERT INTO smf_calendar(title, start_date, end_date, id_board, id_topic, maxAttendants, termsAndCond, id_member) " \
                           f"VALUES('{title}', '{start_date}', '{end_date}', '{id_board}', '{id_topic}', '{max_attendants}', '{termsnconns}', '{self.id_member}')"
-        self.logger.debug(f"Adding event to smf_calendar: {add_event_query}")
-        self.execute_query(query=add_event_query)
+        self.execute_query(query=add_event_query, commit=True)
         id_event = self.cursor.lastrowid
 
         return id_event
@@ -90,15 +94,11 @@ class SQLInteraction:
     def add_attendee_to_event(self,
                               id_event,
                               id_member,
-                              dateRegistered=0,
-                              dateConfirmed=0,
-                              # dateRegistered=datetime.date.today(),
-                              # dateConfirmed=datetime.date.today(),
                               registrant=None,
                               comment=""):
         if not registrant: registrant = self.bot_name  # cant do a self ref default in func def
         add_attendee_query = "INSERT INTO smf_calendar_reg(dateRegistered, ID_EVENT, ID_MEMBER, dateConfirmed, registrant, comment) " \
-                             f"VALUES('{dateRegistered}', '{id_event}', '{id_member}', '{dateConfirmed}', '{registrant}', '{comment}')"
+                             f"VALUES(UNIX_TIMESTAMP(), '{id_event}', '{id_member}', UNIX_TIMESTAMP(), '{registrant}', '{comment}')"
 
         self.logger.debug(f"Adding attendee with: {add_attendee_query}")
         return self.execute_query(query=add_attendee_query, commit=True)
@@ -108,14 +108,12 @@ class SQLInteraction:
         see_users = "SELECT * FROM smf_members"
         return self.execute_query(see_users)
 
-
     def print_all_tables(self):
         print("top: " + str(self.execute_query("SELECT * FROM smf_topics")))
         print("msg: " + str(self.execute_query("SELECT * FROM smf_messages")))
         print("cal: " + str(self.execute_query("SELECT * FROM smf_calendar")))
         print("crg: " + str(self.execute_query("SELECT * FROM smf_calendar_reg")))
         print("mem: " + str(self.execute_query("SELECT * FROM smf_members")))
-
 
 
 if __name__ == "__main__":
@@ -126,6 +124,7 @@ if __name__ == "__main__":
         user=args["sql_user"],
         password=args["sql_pass"]
     )
+
 
     # tables = myclass.execute_query("show tables")
     # logging.info(f"{tables=}")
@@ -140,19 +139,19 @@ if __name__ == "__main__":
 
     # add_attendee = myclass.add_attendee_to_event(id_event=927, id_member=2764)
 
-    # myclass.create_event(title="Saturday Naval")
+    def delete_all():
+        myclass.execute_query("DELETE FROM smf_topics WHERE id_board=12")
+        myclass.execute_query("DELETE FROM smf_messages WHERE id_board=12")
+        myclass.execute_query("DELETE FROM smf_calendar WHERE id_board=12")
+        myclass.execute_query("DELETE FROM smf_calendar_reg WHERE registrant='attend-o-tron'", commit=True)
 
-    #  cal event_id = 927
 
-    # myclass.execute_query("DELETE FROM smf_topics WHERE id_topic=3066")
-    # myclass.execute_query("DELETE FROM smf_messages WHERE id_msg=10491")
-    # myclass.execute_query("DELETE FROM smf_calendar WHERE id_event=926")
-    # myclass.execute_query("DELETE FROM smf_calendar_reg WHERE id_entry=31729", commit=True)
+    delete_all()
+    myclass.create_event(title="Sunday Naval")
 
     myclass.print_all_tables()
 
     # myclass.add_member("sparky")
 
-    users =myclass.get_all_users()
-
-    print(f"Currently {len(users)} users in the db")
+    # users = myclass.get_all_users()
+    # print(f"Currently {len(users)} users in the db")
