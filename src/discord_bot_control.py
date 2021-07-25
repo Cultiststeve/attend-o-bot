@@ -1,3 +1,4 @@
+import datetime
 import logging
 import random
 from typing import Optional, Dict, List
@@ -65,9 +66,11 @@ class AttendanceFunctions(commands.Cog):
         self.channel_whitelist: List = []
         self.set_target_channels_inner(target_channels="Server 1, Server 2")
 
+        self.first_seen: dict = {}  # During an event, keep track of when we first saw clids
+
     def cog_unload(self):
         self.ts3_keep_aliver.cancel()
-        self.take_attendance.cancel()
+        self.scan_for_attendance.cancel()
 
     @staticmethod
     async def log_and_discord_print(ctx, message, level=logging.INFO):
@@ -125,15 +128,16 @@ class AttendanceFunctions(commands.Cog):
             await ctx.send(f"Error while processing {ctx.command} : {error}")  # inform user
             # traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
-    @tasks.loop(seconds=200)
+    @tasks.loop(seconds=10)
     async def ts3_keep_aliver(self):
         self.logger.debug("Sending keepalive to ts3")
         teamspeak_query_controller.keep_conn_alive()
 
     @commands.command()
     async def current_state(self, ctx):
-        """Debug function, list intresting state variable values"""
-        await self.log_and_discord_print(ctx, f"```{self.take_attendance.is_running()=}\n"
+        """Debug function, list interesting state variable values"""
+        await self.log_and_discord_print(ctx, f"```"
+                                              f"{self.scan_for_attendance.is_running()=}\n"
                                               f"{self.current_event_id=}\n"
                                               f"{self.channel_whitelist=}\n"
                                               f"```")
@@ -142,7 +146,6 @@ class AttendanceFunctions(commands.Cog):
         target_channels = target_channels.split(sep=',')
         self.channel_whitelist = teamspeak_query_controller.get_children_named_channels(
             target_channel_names=target_channels)
-
 
     @commands.command()
     async def set_target_channels(self, ctx, target_channels: str):
@@ -155,12 +158,42 @@ class AttendanceFunctions(commands.Cog):
         await self.log_and_discord_print(ctx, message=f"Set channel whitelist to {self.channel_whitelist}")
 
     @tasks.loop(seconds=5)
-    async def take_attendance(self, ctx_started_from):
+    async def scan_for_attendance(self, ctx_started_from):
         """While running, this function monitors everyone in teamspeak in the right channels"""
         await self.log_and_discord_print(ctx_started_from, "Searching for members in teamspeak...")
         all_clients = teamspeak_query_controller.list_all_clients()
-        all_channels = teamspeak_query_controller.list_all_channels()
-        pass
+        for client in all_clients:
+            clid = client.get("clid")
+            if clid in self.first_seen:
+                if self.first_seen["clid"] == True:
+                    continue  # Already added to attendance, no further processing needed
+                if self.first_seen["clid"] + datetime.timedelta(minutes=1) > datetime.datetime.now():
+                    # We saw them over 20 min ago, add to db
+                    self.log_and_discord_print(ctx_started_from, f"{client.get('client_nickname')}")
+                    self.add_client_to_attendance(ctx_started_from, client)
+            else:  # if first sighting
+                self.first_seen[clid] = datetime.datetime.now()
+                self.logger.debug(f"First saw {clid}.")
+
+    def add_client_to_attendance(self, ctx, client: dict):
+        sql_users = sql_controller.get_all_users()
+        sql_usernames = [x[1] for x in sql_users]
+
+        # Find a matching username in the DB, for the TS client
+        sql_username_matching, match_percent = fuzzy_process.extractOne(query=client["client_nickname"],
+                                                                        choices=sql_usernames)
+        if match_percent < args.get("fuzzy_match_distance"):
+            await self.log_and_discord_print(ctx,
+                                             f"**Did not find a close enough match for {client['client_nickname']}, "
+                                             f"you must add this person manually**")
+            return False
+
+        else:
+            # We have a matching sql username
+            id_member = [x[0] for x in sql_users if x[1] == sql_username_matching]
+            self.logger.debug(f"Found matching ID for {client['client_nickname']} - {id_member=}")
+            sql_controller.add_attendee_to_event(id_event=self.current_event_id, id_member=id_member)
+            return True
 
     @commands.command()
     async def start_new_event_attendance(self, ctx, event_name: str):
@@ -170,7 +203,7 @@ class AttendanceFunctions(commands.Cog):
             event_name (str): The name of the event, for display on forums
         """
         logging.debug(f"Got cmd: start_new_event_attendance")
-        if self.take_attendance.is_running():
+        if self.scan_for_attendance.is_running():
             await self.log_and_discord_print(ctx, "Already taking attendance, please stop existing")
             return
 
@@ -179,7 +212,7 @@ class AttendanceFunctions(commands.Cog):
                                          f"Created new event with name {event_name} and id {self.current_event_id}. "
                                          f"Now taking attendance for this event, for channels {1}")
 
-        self.take_attendance.start(ctx)
+        self.scan_for_attendance.start(ctx)
 
     @commands.command()
     async def start_existing_event_attendance(self, ctx, event_id: int):
@@ -190,20 +223,20 @@ class AttendanceFunctions(commands.Cog):
 
         """
         logging.debug(f"Got cmd: start_existing_event_attendance with {event_id}")
-        if self.take_attendance.is_running():
+        if self.scan_for_attendance.is_running():
             await self.log_and_discord_print(f"Already taking attendance for event id {self.current_event_id}. "
                                              f"Please stop this first")
             return
         # TODO
         self.current_event_id = event_id
-        self.take_attendance.start(ctx)
+        self.scan_for_attendance.start(ctx)
 
     @commands.command()
     async def stop_event_attendance(self, ctx):
         """Stops the bot if attendance taking is currently underway, and prints a summary."""
         logging.debug(f"Got cmd: stop_event_attendance")
-        if self.take_attendance.is_running():
-            self.take_attendance.stop()
+        if self.scan_for_attendance.is_running():
+            self.scan_for_attendance.stop()
             await ctx.send(f"Stopped taking attendance for {self.current_event_id}")
             self.current_event_id = None
         else:
@@ -224,33 +257,36 @@ class AttendanceFunctions(commands.Cog):
 def format_clients_for_humans(clients: list):
     clients = [f"{x['client_nickname']} - Client ID:{x['clid']}" for x in clients]
     return clients
+
+
 #
 #
 
 #
 #
-# @bot.command()
-# async def take_attendance(ctx, event_id: str):
-#     selenium_controller.go_to_admin_page(event_id)
-#
-#     clients = teamspeak_query_controller.list_all_clients()
-#
-#     website_names = selenium_controller.get_name_list()
-#
-#     for client in clients:
-#
-#         # If we have a channel list, filter clients not in channels
-#         if cid_list and client["cid"] not in cid_list:
-#             # await ctx.send(f"{client['client_nickname']} not in cid list, not attending.")
-#             continue
-#
-#         # Find closest match in selenium list
-#         enlistment_name, match_percent = fuzzy_process.extractOne(query=client["client_nickname"], choices=website_names)
-#         logging.debug(f"Match for {client['client_nickname']} = {enlistment_name} - {match_percent}")
-#         if match_percent < args.get("fuzzy_match_distance"):
-#             await ctx.send(f"**Did not find a close enough match for {client['client_nickname']}, "
-#                            f"you must add this person manually**")
-#             continue
+@bot.command()
+async def take_attendance(ctx, event_id: str):
+    selenium_controller.go_to_admin_page(event_id)
+
+    clients = teamspeak_query_controller.list_all_clients()
+
+    website_names = selenium_controller.get_name_list()
+
+    for client in clients:
+
+        # If we have a channel list, filter clients not in channels
+        if cid_list and client["cid"] not in cid_list:
+            # await ctx.send(f"{client['client_nickname']} not in cid list, not attending.")
+            continue
+
+        # Find closest match in selenium list
+        enlistment_name, match_percent = fuzzy_process.extractOne(query=client["client_nickname"],
+                                                                  choices=website_names)
+        logging.debug(f"Match for {client['client_nickname']} = {enlistment_name} - {match_percent}")
+        if match_percent < args.get("fuzzy_match_distance"):
+            await ctx.send(f"**Did not find a close enough match for {client['client_nickname']}, "
+                           f"you must add this person manually**")
+            continue
 #
 #         if selenium_controller.tick_box_for_name(enlistment_name):
 #             await ctx.send(f"Marked {client['client_nickname']}={enlistment_name} as attending")
