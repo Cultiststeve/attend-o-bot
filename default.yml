@@ -19,3 +19,4 @@ webdriver_port: 4444
 
 
 fuzzy_match_distance: 90
+time_before_attended: 20

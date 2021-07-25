@@ -35,7 +35,7 @@ def get_args() -> Dict:
     parser.add_argument("--sql_user")
     parser.add_argument("--sql_pass")
 
-
     parser.add_argument("--fuzzy_match_distance", type=int)
+    parser.add_argument("--time_to_attend", type=int, help="Time required for attendance, in minutes.")
 
     return vars(parser.parse_args())

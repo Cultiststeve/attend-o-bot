@@ -128,7 +128,7 @@ class AttendanceFunctions(commands.Cog):
             await ctx.send(f"Error while processing {ctx.command} : {error}")  # inform user
             # traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
-    @tasks.loop(seconds=10)
+    @tasks.loop(seconds=200)
     async def ts3_keep_aliver(self):
         self.logger.debug("Sending keepalive to ts3")
         teamspeak_query_controller.keep_conn_alive()
@@ -157,42 +157,52 @@ class AttendanceFunctions(commands.Cog):
         self.set_target_channels_inner(target_channels)
         await self.log_and_discord_print(ctx, message=f"Set channel whitelist to {self.channel_whitelist}")
 
-    @tasks.loop(seconds=5)
+    @tasks.loop(seconds=15)
     async def scan_for_attendance(self, ctx_started_from):
         """While running, this function monitors everyone in teamspeak in the right channels"""
         await self.log_and_discord_print(ctx_started_from, "Searching for members in teamspeak...")
         all_clients = teamspeak_query_controller.list_all_clients()
         for client in all_clients:
             clid = client.get("clid")
-            if clid in self.first_seen:
-                if self.first_seen["clid"] == True:
+            client_nickname = client.get('client_nickname')
+            if clid in self.first_seen.keys():
+                if self.first_seen[clid] == True:
                     continue  # Already added to attendance, no further processing needed
-                if self.first_seen["clid"] + datetime.timedelta(minutes=1) > datetime.datetime.now():
+                if self.first_seen[clid] + datetime.timedelta(minutes=args.get("time_to_attend")) < datetime.datetime.now():
                     # We saw them over 20 min ago, add to db
-                    self.log_and_discord_print(ctx_started_from, f"{client.get('client_nickname')}")
-                    self.add_client_to_attendance(ctx_started_from, client)
+                    await self.log_and_discord_print(ctx_started_from,
+                                                     f"Saw {client_nickname} over {args.get('time_to_attend')} min ago - attempted to match to database name")
+                    res = await self.add_client_to_attendance(ctx_started_from, client)
+                    self.first_seen[clid] = True
             else:  # if first sighting
                 self.first_seen[clid] = datetime.datetime.now()
-                self.logger.debug(f"First saw {clid}.")
+                await self.log_and_discord_print(ctx_started_from, f"First saw {clid}: {client_nickname}.",
+                                                 level=logging.DEBUG)
 
-    def add_client_to_attendance(self, ctx, client: dict):
+    async def add_client_to_attendance(self, ctx, client: dict):
+        ts_client_username = client["client_nickname"]
         sql_users = sql_controller.get_all_users()
-        sql_usernames = [x[1] for x in sql_users]
+        sql_usernames = [x["member_name"] for x in sql_users]
 
         # Find a matching username in the DB, for the TS client
-        sql_username_matching, match_percent = fuzzy_process.extractOne(query=client["client_nickname"],
+        sql_username_matching, match_percent = fuzzy_process.extractOne(query=ts_client_username,
                                                                         choices=sql_usernames)
         if match_percent < args.get("fuzzy_match_distance"):
             await self.log_and_discord_print(ctx,
-                                             f"**Did not find a close enough match for {client['client_nickname']}, "
+                                             f"**Did not find a close enough match for TS user {client['client_nickname']}, "
                                              f"you must add this person manually**")
             return False
 
         else:
-            # We have a matching sql username
-            id_member = [x[0] for x in sql_users if x[1] == sql_username_matching]
+            # We have a matching sql usernames
+            id_member = [x["id_member"] for x in sql_users if x["member_name"] == sql_username_matching]
+            assert len(id_member) == 1
+            id_member = id_member[0]
             self.logger.debug(f"Found matching ID for {client['client_nickname']} - {id_member=}")
             sql_controller.add_attendee_to_event(id_event=self.current_event_id, id_member=id_member)
+            await self.log_and_discord_print(ctx,
+                                             f"Found a match for TS user: {ts_client_username} = Database name: {sql_username_matching}.\n"
+                                             f"Added to event {self.current_event_id}")
             return True
 
     @commands.command()

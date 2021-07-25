@@ -20,7 +20,7 @@ class SQLInteraction:
         self.connection = connect(
             host=host, user=user, password=password
         )
-        self.cursor = self.connection.cursor()
+        self.cursor = self.connection.cursor(dictionary=True)
         self.id_member = 2764  # TODO what is the ID of our bot poster
         self.bot_name = "attend-o-tron"
         self.bot_email = "attendance@fidyfirst.com"
@@ -79,7 +79,7 @@ class SQLInteraction:
         id_message = self.cursor.lastrowid
         # TODO poster time, id_msg_modified, poster_email, poster_ip, icon
 
-        # Update the topic with the message we just added
+        # Update the topic with the message we just addedid_member
         self.execute_query(f"UPDATE smf_topics "
                            f"SET id_first_msg='{id_message}', id_last_msg='{id_message}'  "
                            f"WHERE id_topic={id_topic}")
@@ -134,7 +134,12 @@ if __name__ == "__main__":
     #     logging.info(f"{table=} : {described=}")
 
     # myclass.add_member()
-    # print(myclass.execute_query("SELECT * FROM smf_members WHERE member_name='cultiststeve'"))
+    # for row in myclass.cursor:
+    #     print(row)
+
+    res = myclass.get_all_users()
+
+    print(res)
     # cultiststeve = 2764
 
     # add_attendee = myclass.add_attendee_to_event(id_event=927, id_member=2764)
@@ -146,10 +151,11 @@ if __name__ == "__main__":
         myclass.execute_query("DELETE FROM smf_calendar_reg WHERE registrant='attend-o-tron'", commit=True)
 
 
-    delete_all()
-    myclass.create_event(title="Sunday Naval")
+    # delete_all()
+    # myclass.create_event(title="Sunday Naval")
 
-    myclass.print_all_tables()
+    # res = myclass.get_all_users()
+    # myclass.print_all_tables()
 
     # myclass.add_member("sparky")
 
