@@ -103,7 +103,6 @@ class AttendanceFunctions(commands.Cog):
                 return
 
         ignored = (commands.CommandNotFound,)
-
         # Allows us to check for original exceptions raised and sent to CommandInvokeError.
         # If nothing is found. We keep the exception passed to on_command_error.
         error = getattr(error, 'original', error)
@@ -111,10 +110,8 @@ class AttendanceFunctions(commands.Cog):
         # Anything in ignored will return and prevent anything happening.
         if isinstance(error, ignored):
             return
-
         if isinstance(error, commands.DisabledCommand):
             await ctx.send(f'{ctx.command} has been disabled.')
-
         elif isinstance(error, commands.NoPrivateMessage):
             try:
                 await ctx.author.send(f'{ctx.command} can not be used in Private Messages.')
@@ -125,12 +122,12 @@ class AttendanceFunctions(commands.Cog):
         elif isinstance(error, commands.BadArgument):
             if ctx.command.qualified_name == 'tag list':  # Check if the command being invoked is 'tag list'
                 await ctx.send('I could not find that member. Please try again.')
-
         else:
             # All other Errors not returned come here. And we can just print the default TraceBack.
             logging.error(f'Ignoring exception in command {ctx.command}: {error}')
+            logging.error(traceback.extract_stack())
             await ctx.send(f"Error while processing {ctx.command} : {error}")  # inform user
-            # traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
     @tasks.loop(seconds=200)
     async def ts3_keep_aliver(self):
@@ -170,6 +167,7 @@ class AttendanceFunctions(commands.Cog):
             # TODO channel whitelist
             clid = client.get("clid")
             client_nickname = client.get('client_nickname')
+            # TODO ignore the attendnace bot
             if clid in self.first_seen.keys():
                 if self.first_seen[clid] == True:
                     continue  # Already added to attendance, no further processing needed
@@ -272,19 +270,23 @@ class AttendanceFunctions(commands.Cog):
 
     async def do_event_summary(self, ctx):
         # TODO promotions#
+        await ctx.send(f"**Summary for {self.current_event_name} - {self.current_event_id}**")
         str_to_send = "```"
-        str_to_send += "Summary for {self.current_event_name} - {self.current_event_id}\n"
-        str_to_send += "Added the following matches to the attendance for this event:\n"
-        for match in self.matched:
-            str_to_send += f"* {match} = {self.matched[match]}"
-        str_to_send += "Could not find a match for the following, *You must add them manually*:\n"
-        for notmatch in self.not_matched:
-            str_to_send += f"* {notmatch} = {self.not_matched[notmatch]}\n"
-        str_to_send += "The following people were seen but had not attended for enough time to earn attendance:\n"
-        for first_seen in self.first_seen:
-            if first_seen == True:
-                continue  # Attempt to match was made
-            str_to_send += f"* {first_seen} - first seen at {self.first_seen['first_seen']}\n"
+        if len(self.matched) > 0:
+            str_to_send += "Added the following matches to the attendance for this event:\n"
+            for match in self.matched:
+                str_to_send += f"* {match} = {self.matched[match]}"
+        if len(self.not_matched) > 0:
+            str_to_send += "Could not find a match for the following, *You must add them manually*:\n"
+            for notmatch in self.not_matched:
+                str_to_send += f"* {notmatch}\n"
+        if len([x for x in self.first_seen if x != True]) > 0:  # Len of non-processed
+            str_to_send += "The following people were seen but had not attended for enough time to earn attendance:\n"
+            for first_seen_name in self.first_seen:
+                if first_seen_name == True:
+                    continue  # Attempt to match was made
+                str_to_send += f"* {first_seen_name} - first seen at {self.first_seen[first_seen_name]}\n"
+        str_to_send += "End of summary\n"
         str_to_send += "```"
         await ctx.send(str_to_send)
     pass
