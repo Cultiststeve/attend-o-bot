@@ -171,30 +171,29 @@ class AttendanceFunctions(commands.Cog):
         all_clients = teamspeak_query_controller.list_all_clients()
         self.logger.debug(f"Found {len(all_clients)} on server")
         for client in all_clients:
-            clid = client.get("clid")
+            cldbid = client.get("client_database_id")  # Use this, moar unique
             cid = client.get("cid")
-
             if cid not in self.channel_whitelist:
                 continue
 
             client_nickname = client.get('client_nickname')
             # TODO ignore the attendance bot + music bots?
-            if clid in self.first_seen.keys():
-                if self.first_seen[clid] == True:
+            if cldbid in self.first_seen.keys():
+                if self.first_seen[cldbid] == True:
                     continue  # Already added to attendance, no further processing needed
-                if self.first_seen[clid] + datetime.timedelta(minutes=args.get("time_to_attend")) \
+                if self.first_seen[cldbid] + datetime.timedelta(minutes=args.get("time_to_attend")) \
                         < datetime.datetime.now():
-                    # We saw them over 20 min ago, add to db
+                    # We saw them over X min ago, add to db
                     await self.log_and_discord_print(ctx_started_from,
                                                      f"Saw {client_nickname} over {args.get('time_to_attend')} "
                                                      f"min ago - attempting to match to database name")
                     success = await self.add_client_to_attendance(ctx_started_from, client)
-                    self.first_seen[clid] = True
-                    self.limbo_names.pop(clid)
+                    self.first_seen[cldbid] = True
+                    self.limbo_names.pop(cldbid)
             else:  # if first sighting
-                self.first_seen[clid] = datetime.datetime.now()
-                self.limbo_names[clid] = client_nickname
-                await self.log_and_discord_print(ctx_started_from, f"First sight of  {clid}:{client_nickname}.",
+                self.first_seen[cldbid] = datetime.datetime.now()
+                self.limbo_names[cldbid] = client_nickname
+                await self.log_and_discord_print(ctx_started_from, f"First sight of {cldbid}:{client_nickname}.",
                                                  level=logging.DEBUG)
         self.logger.debug("Finished scanning")
 
@@ -288,15 +287,17 @@ class AttendanceFunctions(commands.Cog):
         await ctx.send(f"**Summary for {self.current_event_name} - {self.current_event_id}**")
         str_to_send = "```"
         if len(self.matched) > 0:
-            str_to_send += "Added the following matches to the attendance for this event:\n"
+            str_to_send += f"Added the a total of {len(self.matched)} matches to the attendance for this event:\n"
             for match in self.matched:
                 str_to_send += f"* {match} = {self.matched[match]}\n"
         if len(self.not_matched) > 0:
-            str_to_send += "Could not find a match for the following, You must add them manually:\n"
+            str_to_send += f"Could not find a match for a total of {len(self.not_matched)}, " \
+                           f"ensure you add them manually:\n"
             for notmatch in self.not_matched:
                 str_to_send += f"* {notmatch}\n"
         if len(self.limbo_names) > 0:  # Len of non-processed
-            str_to_send += "The following people were seen but had not attended for enough time to earn attendance:\n"
+            str_to_send += f"The following {len(self.limbo_names)} people were seen but had not attended for enough " \
+                           f"time to earn attendance:\n"
             for limbo_clid in self.limbo_names:
                 str_to_send += f"* {self.limbo_names.get(limbo_clid)} - first seen at {self.first_seen.get(limbo_clid)}\n"
         str_to_send += "End of summary\n"
