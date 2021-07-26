@@ -7,18 +7,18 @@ import ts3
 class TeamspeakQueryControl:
 
     def __init__(self, query_username, query_password, server_url, server_port, SID=1):
+        self.logger = logging.getLogger("main.TeamspeakQueryControl")
         self.ts3conn = ts3.query.TS3ServerConnection(
             f"ssh://{query_username}:{query_password}@{server_url}:{server_port}")
         self.ts3conn.exec_("use", sid=SID)
 
-
     def list_all_clients(self) -> List:
-        logging.info("Listing all clients")
+        self.logger.debug("Querying for all clients")
         resp = self.ts3conn.query(cmd="clientlist").fetch()
         return resp.parsed
 
     def list_all_channels(self) -> List:
-        logging.info("Listing all channels")
+        self.logger.debug("Querying for all channels")
         resp = self.ts3conn.query(cmd="channellist").fetch()
         return resp.parsed
 
@@ -36,6 +36,7 @@ class TeamspeakQueryControl:
 
     def get_children_named_channels(self, target_channel_names: List[str]):
         """Given a list of channel names, return a list of all of their children"""
+        self.logger.debug(f"Getting children of channels: {target_channel_names}")
         target_channel_names = [x.strip() for x in target_channel_names]
         all_channels = self.list_all_channels()
         target_channel_cids = []
@@ -54,6 +55,7 @@ class TeamspeakQueryControl:
         return resp.parsed
 
     def keep_conn_alive(self):
+        self.logger.debug("Sending TS3 query keepalive")
         self.ts3conn.send_keepalive()
 
 

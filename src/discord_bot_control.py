@@ -34,7 +34,7 @@ cid_list = None
 
 @bot.event
 async def on_ready():
-    logging.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    logging.info(f'Logged in as {bot.user} (ID: {bot.user.id}). Bot is ready!')
 
 
 @bot.command()
@@ -64,9 +64,10 @@ class AttendanceFunctions(commands.Cog):
         self.set_target_channels_inner(target_channels="Server 1, Server 2")
 
         self.current_event_id: Optional[int] = None
-        self.current_event_name: str
-        self.first_seen = {}  # During an event, keep track of when we first saw clids
-        self.matched = {}  # key is ts user, val is db name
+        self.current_event_name: Optional[str] = None
+        # During an event, keep track of when we first saw clids
+        self.first_seen = {}  # key is clid, val is first seen time (or true if added to attendnace)
+        self.matched = {}  # key is ts name, val is db name
         self.not_matched = set()  # Set of ts usernames
 
         self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
@@ -133,7 +134,6 @@ class AttendanceFunctions(commands.Cog):
 
     @tasks.loop(seconds=200)
     async def ts3_keep_aliver(self):
-        self.logger.debug("Sending keepalive to ts3")
         teamspeak_query_controller.keep_conn_alive()
 
     @commands.command()
@@ -141,8 +141,9 @@ class AttendanceFunctions(commands.Cog):
         """Debug function, list interesting state variable values"""
         await self.log_and_discord_print(ctx, f"```"
                                               f"{self.scan_for_attendance.is_running()=}\n"
-                                              f"{self.current_event_id=}\n"
+                                              f"{self.current_event_id=} - {self.current_event_name=}\n"
                                               f"{self.channel_whitelist=}\n"
+                                              f"{self.first_seen=}\n"
                                               f"```")
 
     def set_target_channels_inner(self, target_channels: str):
@@ -163,7 +164,7 @@ class AttendanceFunctions(commands.Cog):
     @tasks.loop(seconds=15)
     async def scan_for_attendance(self, ctx_started_from):
         """While running, this function monitors everyone in teamspeak in the right channels"""
-        await self.log_and_discord_print(ctx_started_from, "Searching for members in teamspeak...")
+        self.logger.debug("Searching for members in teamspeak")
         all_clients = teamspeak_query_controller.list_all_clients()
         for client in all_clients:
             # TODO channel whitelist
@@ -172,45 +173,46 @@ class AttendanceFunctions(commands.Cog):
             if clid in self.first_seen.keys():
                 if self.first_seen[clid] == True:
                     continue  # Already added to attendance, no further processing needed
-                if self.first_seen[clid] + \
-                        datetime.timedelta(minutes=args.get("time_to_attend")) < datetime.datetime.now():
+                if self.first_seen[clid] + datetime.timedelta(minutes=args.get("time_to_attend")) \
+                        < datetime.datetime.now():
                     # We saw them over 20 min ago, add to db
                     await self.log_and_discord_print(ctx_started_from,
                                                      f"Saw {client_nickname} over {args.get('time_to_attend')} "
-                                                     f"min ago - attempted to match to database name")
+                                                     f"min ago - attempting to match to database name")
                     success = await self.add_client_to_attendance(ctx_started_from, client)
                     self.first_seen[clid] = True
             else:  # if first sighting
                 self.first_seen[clid] = datetime.datetime.now()
-                await self.log_and_discord_print(ctx_started_from, f"First saw {clid}: {client_nickname}.",
+                await self.log_and_discord_print(ctx_started_from, f"First sight of  {clid}:{client_nickname}.",
                                                  level=logging.DEBUG)
 
     async def add_client_to_attendance(self, ctx, client: dict):
         ts_client_username = client["client_nickname"]
-        sql_users = sql_controller.get_all_users()
-        sql_usernames = [x["member_name"] for x in sql_users]
+        all_sql_users = sql_controller.get_all_users()
+        sql_usernames = [x["member_name"] for x in all_sql_users]
 
         # Find a matching username in the DB, for the TS client
         sql_username_matching, match_percent = fuzzy_process.extractOne(query=ts_client_username,
                                                                         choices=sql_usernames)
+        self.logger.debug(f"Found best match for {ts_client_username} = {sql_username_matching=} with score {match_percent}")
+
         if match_percent < args.get("fuzzy_match_distance"):
             await self.log_and_discord_print(ctx,
-                                             f"**Did not find a close enough match for TS user {client['client_nickname']}, "
+                                             f"**Did not find a close enough match for TS user {ts_client_username}, "
                                              f"you must add this person manually**")
             self.not_matched.add(ts_client_username)
             return False
-
         else:
             # We have a matching sql usernames
-            id_member = [x["id_member"] for x in sql_users if x["member_name"] == sql_username_matching]
-            assert len(id_member) == 1
+            id_member = [x["id_member"] for x in all_sql_users if x["member_name"] == sql_username_matching]
+            assert len(id_member) == 1  # sql usernames must be unique
             id_member = id_member[0]
-            self.logger.debug(f"Found matching ID for {client['client_nickname']} - {id_member=}")
+            self.logger.debug(f"Matched {client} to {id_member}:{sql_username_matching}")
             sql_controller.add_attendee_to_event(id_event=self.current_event_id, id_member=id_member)
             self.matched[ts_client_username] = sql_username_matching
             await self.log_and_discord_print(ctx,
-                                             f"Found a match for TS user: {ts_client_username} = Database name: {sql_username_matching}.\n"
-                                             f"Added to event {self.current_event_id}")
+                                             f"Found a match for TS name: {ts_client_username} = Database name: {sql_username_matching}.\n"
+                                             f"Added to event {self.current_event_name}")
             return True
 
     @commands.command()
@@ -224,8 +226,8 @@ class AttendanceFunctions(commands.Cog):
         if self.scan_for_attendance.is_running():
             await self.log_and_discord_print(ctx, "Already taking attendance, please stop existing")
             return
-
         self.current_event_id = sql_controller.create_event(event_name)
+        self.current_event_name = event_name
         await self.log_and_discord_print(ctx,
                                          f"Created new event with name {event_name} and id {self.current_event_id}. "
                                          f"Now taking attendance for this event, for channels {1}")
@@ -245,8 +247,9 @@ class AttendanceFunctions(commands.Cog):
             await self.log_and_discord_print(f"Already taking attendance for event id {self.current_event_id}. "
                                              f"Please stop this first")
             return
-        # TODO
+
         self.current_event_id = event_id
+        self.current_event_name = sql_controller.get_event_name_for_id(self.current_event_id)
         self.scan_for_attendance.start(ctx)
 
     @commands.command()
@@ -301,75 +304,3 @@ class AttendanceFunctions(commands.Cog):
 def format_clients_for_humans(clients: list):
     clients = [f"{x['client_nickname']} - Client ID:{x['clid']}" for x in clients]
     return clients
-
-
-#
-#
-
-#
-#
-@bot.command()
-async def take_attendance(ctx, event_id: str):
-    selenium_controller.go_to_admin_page(event_id)
-
-    clients = teamspeak_query_controller.list_all_clients()
-
-    website_names = selenium_controller.get_name_list()
-
-    for client in clients:
-
-        # If we have a channel list, filter clients not in channels
-        if cid_list and client["cid"] not in cid_list:
-            # await ctx.send(f"{client['client_nickname']} not in cid list, not attending.")
-            continue
-
-        # Find closest match in selenium list
-        enlistment_name, match_percent = fuzzy_process.extractOne(query=client["client_nickname"],
-                                                                  choices=website_names)
-        logging.debug(f"Match for {client['client_nickname']} = {enlistment_name} - {match_percent}")
-        if match_percent < args.get("fuzzy_match_distance"):
-            await ctx.send(f"**Did not find a close enough match for {client['client_nickname']}, "
-                           f"you must add this person manually**")
-            continue
-#
-#         if selenium_controller.tick_box_for_name(enlistment_name):
-#             await ctx.send(f"Marked {client['client_nickname']}={enlistment_name} as attending")
-#         else:
-#             logging.error(f"After fuzzy matching, could not tick box for {enlistment_name=} for {client['client_nickname']}")
-#             await ctx.send(f"Did not find a matching name for {client['client_nickname']}={enlistment_name}."
-#                            f"This should not happen after fuzzy matching, sorry.")
-#
-#     selenium_controller.click_submit()
-#     await ctx.send("Finished taking attendance!")
-#
-#
-# @bot.command()
-# async def get_clids(ctx):
-#     channel_list = teamspeak_query_controller.list_all_channels()
-#     readable_list = []
-#     for channel in channel_list:
-#         readable_dict = dict((k, channel[k]) for k in ["cid", "channel_name"] if k in channel)
-#         readable_list.append(readable_dict)
-#
-#     for channel in readable_list:
-#         await ctx.send(channel)
-#
-#
-# @bot.command()
-# async def set_clids(ctx, clids: str):
-#     global cid_list
-#     logging.info(f"Setting clids. Input: {clids}")
-#     clids = clids.split(sep=",")
-#     # clids = [int(x) for x in clids]
-#     cid_list = clids
-#     await ctx.send(f"Set channel whitelist to {cid_list}")
-#
-#
-#
-# # @bot.event
-# # async def on_message(message):
-# #     print(message)
-# #     if message.content == 'test':
-# #         await message.channel.send('Testing 1 2 3!')
-# #
-# #     await bot.process_commands(message)

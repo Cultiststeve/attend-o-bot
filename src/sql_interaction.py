@@ -108,6 +108,10 @@ class SQLInteraction:
         see_users = "SELECT * FROM smf_members"
         return self.execute_query(see_users)
 
+    def get_event_name_for_id(self, id_event: int):
+        event_query = f"SELECT * FROM smf_calendar WHERE id_event={str(id_event)}"
+        return self.execute_query(event_query)[0].get("title")
+
     def print_all_tables(self):
         print("top: " + str(self.execute_query("SELECT * FROM smf_topics")))
         print("msg: " + str(self.execute_query("SELECT * FROM smf_messages")))
@@ -155,7 +159,10 @@ if __name__ == "__main__":
     # myclass.create_event(title="Sunday Naval")
 
     # res = myclass.get_all_users()
-    # myclass.print_all_tables()
+    myclass.print_all_tables()
+
+    res = myclass.get_event_name_for_id(id_event=944)
+    print(res)
 
     # myclass.add_member("sparky")
 
