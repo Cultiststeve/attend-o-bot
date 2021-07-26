@@ -47,7 +47,9 @@ class TeamspeakQueryControl:
 
         target_children = []
         for target_channel_cid in target_channel_cids:
-            target_children.append(self.get_children_channels(target_channel_cid))
+            child_channels = self.get_children_channels(target_channel_cid)
+            for child in child_channels:
+                target_children.append(child)
         return target_children
 
     def get_client_info(self, clid):
@@ -68,9 +70,9 @@ if __name__ == "__main__":
                                                        server_url=args.get("ts_url"),
                                                        server_port=args.get("ts_port"))
 
-    # channels = teamspeak_query_controller.list_all_channels()
-    # print(channels)
+    res = teamspeak_query_controller.list_all_clients()
 
-    children = teamspeak_query_controller.get_children_named_channels(target_channel_names=["Server 1", "Server 2"])
-    print(children)
+    res2 = teamspeak_query_controller.get_client_info(clid="1316")
+
     pass
+

@@ -149,8 +149,10 @@ class AttendanceFunctions(commands.Cog):
 
     def set_target_channels_inner(self, target_channels: str):
         target_channels = target_channels.split(sep=',')
-        self.channel_whitelist = teamspeak_query_controller.get_children_named_channels(
+        channel_list = teamspeak_query_controller.get_children_named_channels(
             target_channel_names=target_channels)
+        for chan in channel_list:
+            self.channel_whitelist.append(chan.get("cid"))
 
     @commands.command()
     async def set_target_channels(self, ctx, target_channels: str):
@@ -167,9 +169,14 @@ class AttendanceFunctions(commands.Cog):
         """While running, this function monitors everyone in teamspeak in the right channels"""
         self.logger.debug("Searching for members in teamspeak")
         all_clients = teamspeak_query_controller.list_all_clients()
+        self.logger.debug(f"Found {len(all_clients)} on server")
         for client in all_clients:
-            # TODO channel whitelist
             clid = client.get("clid")
+            cid = client.get("cid")
+
+            if cid not in self.channel_whitelist:
+                continue
+
             client_nickname = client.get('client_nickname')
             # TODO ignore the attendance bot + music bots?
             if clid in self.first_seen.keys():
@@ -189,6 +196,7 @@ class AttendanceFunctions(commands.Cog):
                 self.limbo_names[clid] = client_nickname
                 await self.log_and_discord_print(ctx_started_from, f"First sight of  {clid}:{client_nickname}.",
                                                  level=logging.DEBUG)
+        self.logger.debug("Finished scanning")
 
     async def add_client_to_attendance(self, ctx, client: dict):
         ts_client_username = client["client_nickname"]
@@ -271,6 +279,7 @@ class AttendanceFunctions(commands.Cog):
             self.first_seen = {}
             self.matched = {}
             self.not_matched = {}
+            self.limbo_names = {}
         else:
             await self.log_and_discord_print(ctx, "Not currently taking attendance.")
 
