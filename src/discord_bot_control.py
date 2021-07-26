@@ -70,6 +70,9 @@ class AttendanceFunctions(commands.Cog):
         self.matched = {}  # key is ts name, val is db name
         self.not_matched = set()  # Set of ts usernames
 
+        # Need to store names, for queries if people leave
+        self.limbo_names = {}  # key is clid, val is tsnickname
+
         self.ts3_keep_aliver.start()  # Sends a keep alive to the ts3 every 200 secs
 
     def cog_unload(self):
@@ -141,6 +144,7 @@ class AttendanceFunctions(commands.Cog):
                                               f"{self.current_event_id=} - {self.current_event_name=}\n"
                                               f"{self.channel_whitelist=}\n"
                                               f"{self.first_seen=}\n"
+                                              f"{self.limbo_names=}\n"
                                               f"```")
 
     def set_target_channels_inner(self, target_channels: str):
@@ -167,7 +171,7 @@ class AttendanceFunctions(commands.Cog):
             # TODO channel whitelist
             clid = client.get("clid")
             client_nickname = client.get('client_nickname')
-            # TODO ignore the attendnace bot
+            # TODO ignore the attendance bot + music bots?
             if clid in self.first_seen.keys():
                 if self.first_seen[clid] == True:
                     continue  # Already added to attendance, no further processing needed
@@ -179,8 +183,10 @@ class AttendanceFunctions(commands.Cog):
                                                      f"min ago - attempting to match to database name")
                     success = await self.add_client_to_attendance(ctx_started_from, client)
                     self.first_seen[clid] = True
+                    self.limbo_names.pop(clid)
             else:  # if first sighting
                 self.first_seen[clid] = datetime.datetime.now()
+                self.limbo_names[clid] = client_nickname
                 await self.log_and_discord_print(ctx_started_from, f"First sight of  {clid}:{client_nickname}.",
                                                  level=logging.DEBUG)
 
@@ -275,17 +281,15 @@ class AttendanceFunctions(commands.Cog):
         if len(self.matched) > 0:
             str_to_send += "Added the following matches to the attendance for this event:\n"
             for match in self.matched:
-                str_to_send += f"* {match} = {self.matched[match]}"
+                str_to_send += f"* {match} = {self.matched[match]}\n"
         if len(self.not_matched) > 0:
-            str_to_send += "Could not find a match for the following, *You must add them manually*:\n"
+            str_to_send += "Could not find a match for the following, You must add them manually:\n"
             for notmatch in self.not_matched:
                 str_to_send += f"* {notmatch}\n"
-        if len([x for x in self.first_seen if x != True]) > 0:  # Len of non-processed
+        if len(self.limbo_names) > 0:  # Len of non-processed
             str_to_send += "The following people were seen but had not attended for enough time to earn attendance:\n"
-            for first_seen_name in self.first_seen:
-                if first_seen_name == True:
-                    continue  # Attempt to match was made
-                str_to_send += f"* {first_seen_name} - first seen at {self.first_seen[first_seen_name]}\n"
+            for limbo_clid in self.limbo_names:
+                str_to_send += f"* {self.limbo_names.get(limbo_clid)} - first seen at {self.first_seen.get(limbo_clid)}\n"
         str_to_send += "End of summary\n"
         str_to_send += "```"
         await ctx.send(str_to_send)

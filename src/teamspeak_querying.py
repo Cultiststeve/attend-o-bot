@@ -64,9 +64,9 @@ if __name__ == "__main__":
 
     args = utils.get_args()
     teamspeak_query_controller = TeamspeakQueryControl(query_username=args.get("ts_query_user"),
-                                                                               query_password=args.get("ts_query_pass"),
-                                                                               server_url=args.get("ts_url"),
-                                                                               server_port=args.get("ts_port"))
+                                                       query_password=args.get("ts_query_pass"),
+                                                       server_url=args.get("ts_url"),
+                                                       server_port=args.get("ts_port"))
 
     # channels = teamspeak_query_controller.list_all_channels()
     # print(channels)
